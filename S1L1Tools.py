@@ -32,8 +32,8 @@ class S1L1Tools():
                     self.measurements.append({'polarisation':polarisation,'measurement':gdal.Open(os.path.join('/vsizip/'+self.datasource_path,archived_file.filename))})    
                     
                 if (archived_file.filename.lower().find(polarisation.lower()) !=-1) and (archived_file.filename.find('calibration/calibration') !=-1) and (archived_file.filename.find('.xml') !=-1):
-                    print polarisation
-                    print archived_file.filename
+                    print (polarisation)
+                    print (archived_file.filename)
                     self.radiometric_correction_LUT.append({'polarisation':polarisation,'LUT': self.archive.read(archived_file)})
                     
                 if (archived_file.filename.lower().find(polarisation.lower()) !=-1) and (archived_file.filename.find('noise') !=-1) and (archived_file.filename.find('.xml') !=-1):
@@ -64,7 +64,7 @@ class S1L1Tools():
             
     def perform_radiometric_calibration(self, parameter='sigma', polarisations=None):
         if not parameter in ['sigma','beta','gamma']:
-            print 'Invalid parameter'
+            print ('Invalid parameter')
             return 0
         else:
             parameter = parameter + 'Nought'
@@ -87,7 +87,6 @@ class S1L1Tools():
                 #np.save('/home/silent/ma.npy',measurement_array)
                 #np.save('/home/silent/lut.npy',full_lut)
                 calibrated_array = (measurement_array * measurement_array) / (full_lut * full_lut)
-                print calibrated_array.shape
                 self.measurements.append({'polarisation':measurement['polarisation']+'_'+parameter,'measurement':self.__create_mem_raster_based_on_existing(measurement['measurement'],[calibrated_array],gdal.GDT_Float32)})
     
     def perform_noise_correction_ESA(self):
@@ -103,7 +102,7 @@ class S1L1Tools():
                 self.metadata_raw = self.archive.read(archived_file)
         
         if not self.metadata_raw:
-            print 'error while reading metadata!'
+            print ('error while reading metadata!')
             return 0
             
         self.metadata_xml_raw = etree.ElementTree(etree.fromstring(self.metadata_raw)).getroot()
@@ -157,7 +156,7 @@ class S1L1Tools():
             i+=1
         del dataset
         
-    def __create_mem_raster_based_on_existing(self,raster,new_arrays, new_type=None):
+    def __create_mem_raster_based_on_existing(self,raster, new_arrays, new_type=None):
         driver = gdal.GetDriverByName("MEM")
         if not new_type:        
             dataType = raster.GetRasterBand(1).DataType
@@ -165,8 +164,12 @@ class S1L1Tools():
             dataType = new_type
             
         dataset = driver.Create('', raster.RasterXSize, raster.RasterYSize, raster.RasterCount, dataType)
-        if not raster.GetProjection() or not raster.GetGeoTransform():
-            dataset.SetGCPs(raster.GetGCPs)
+        #print ('===')
+        #print (raster.GetGCPs())
+        #print (raster.GetGCPProjection())
+        if len(raster.GetGCPs()) > 0:
+            dataset.SetGCPs(raster.GetGCPs(), raster.GetGCPProjection())
+            
         else:
             dataset.SetProjection(raster.GetProjection())
             dataset.SetGeoTransform(raster.GetGeoTransform())
