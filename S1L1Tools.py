@@ -15,15 +15,20 @@ import numpy as np
 
 class S1L1Tools():
     
-    metadata = {}
-    measurements = []
-    radiometric_correction_LUT = []
-    noise_correction_LUT = []
+    # metadata = {}
+    # measurements = []
+    # radiometric_correction_LUT = []
+    # noise_correction_LUT = []
         
     
     def __init__(self,datasource_path):
         self.datasource_path = datasource_path
         self.datasource_body = os.path.basename(datasource_path).split('.')[0]
+        self.measurements = []
+        self.radiometric_correction_LUT = []
+        self.noise_correction_LUT = []
+        
+        self.metadata = {}
         self.__get_metadata()
         
         for polarisation in self.metadata['polarisations']:
