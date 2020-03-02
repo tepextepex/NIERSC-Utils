@@ -12,6 +12,8 @@ import xml.etree.ElementTree as etree
 from datetime import datetime
 from scipy import interpolate, ndimage
 import numpy as np
+import shapely.wkt
+import geojson
 
 class S1L1Tools():
     
@@ -27,7 +29,7 @@ class S1L1Tools():
         self.measurements = []
         self.radiometric_correction_LUT = []
         self.noise_correction_LUT = []
-        
+
         self.metadata = {}
         self.__get_metadata()
         
@@ -249,9 +251,39 @@ class S1L1Tools():
         ok = ~np.isnan(B)
         xp = ok.ravel().nonzero()[0]
         fp = B[~np.isnan(B)]
-        x  = np.isnan(B).ravel().nonzero()[0]
+        x = np.isnan(B).ravel().nonzero()[0]
         B[np.isnan(B)] = np.interp(x, xp, fp)
         return B
-    
+
+    def __dump_footprint_to_geojson(self, footprint, out_dir):
+        result = False
+        try:
+            geojson_file_path = os.path.join(out_dir, "%s.geojson" % self.datasource_body)
+            g1 = shapely.wkt.loads(footprint)
+            g2 = geojson.Feature(geometry=g1, properties={})
+            outfile = open(geojson_file_path, "w")
+            geojson.dump(g2, outfile)
+            outfile.close()
+            result = geojson_file_path
+        except Exception as e:
+            print e
+            result = False
+        finally:
+            return result
+
+    def create_footprint(self, out_dir):
+        result = False
+        try:
+            if not os.path.exists(out_dir):
+                os.makedirs(out_dir)
+            footprint = self.metadata["foot_print"]
+            created_file_path = self.__dump_footprint_to_geojson(footprint, out_dir)
+            result = created_file_path
+        except Exception as e:
+            print e
+            result = False
+        finally:
+            return result
+
 #tools = S1L1Tools('/home/silent/Data/sakhalin/S1A_IW_GRDH_1SSV_20150430T203758_20150430T203826_005718_007570_463D.SAFE.zip')
 #tools = S1L1Tools('/home/silent/Testing/datasets/S1A_EW_GRDM_1SDH_20141101T022433_20141101T022533_003082_00387B_077E.SAFE.zip')
