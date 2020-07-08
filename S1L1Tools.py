@@ -70,10 +70,10 @@ class S1L1Tools:
                 current_measurement = self.__reproject_raster_to_projection(current_measurement, projection)
 
                 if preview_mode:
-                    pixelSize = self.__get_raster_pixel_size(current_measurement)
+                    pixel_size = self.__get_raster_pixel_size(current_measurement)
                     current_measurement = self.__set_raster_resolution(current_measurement,
-                                                                       pixelSize['xSize'] * x_scale,
-                                                                       pixelSize['ySize'] * y_scale)
+                                                                       pixel_size['xSize'] * x_scale,
+                                                                       pixel_size['ySize'] * y_scale)
                     self.__save_raster_to_jpeg(current_measurement, current_name)
                 else:
                     self.__save_raster_to_gtiff(current_measurement, current_name)
@@ -85,16 +85,16 @@ class S1L1Tools:
         input_fnames = self.export_to_l2(output_directory, polarisations, projection)
         for fname in input_fnames:
             try:
-                dataset = gdal.Open(fname)
-                band = dataset.GetRasterBand(1)
-                (min, max, mean, stddev) = band.GetStatistics(0, 1)
+                ds = gdal.Open(fname)
+                band = ds.GetRasterBand(1)
+                (band_min, band_max, mean, stddev) = band.GetStatistics(0, 1)
                 # compute Mean+-2StdDev
                 min2sigma = mean - 2 * stddev
                 max2sigma = mean + 2 * stddev
                 # scale values to 8-bit range and set NoDataValue to 0:
                 tmp1_fname = fname[:-4] + '_tmp1.tif'
                 # self.__scale_values_to_byte(dataset, min2sigma, max2sigma, tmp1_fname)
-                self.__scale_values_to_byte(dataset, 0, max2sigma, tmp1_fname)
+                self.__scale_values_to_byte(ds, 0, max2sigma, tmp1_fname)
                 # coarse the resolution:
                 tmp2_fname = fname[:-4] + '_tmp2.tif'
                 cmd = 'gdalwarp -tr 600 1200 -srcnodata 0 -dstnodata none %s %s' % (
@@ -102,8 +102,8 @@ class S1L1Tools:
                 print cmd
                 os.system(cmd)
                 # calc alpha band from nodata
-                tmpAlpha_fname = fname[:-4] + '_tmpAlpha.tif'
-                cmd = 'gdal_calc.py -A %s --outfile=%s --calc="(A==0)*0 + (A>0)*255"' % (tmp2_fname, tmpAlpha_fname)
+                tmp_alpha_name = fname[:-4] + '_tmpAlpha.tif'
+                cmd = 'gdal_calc.py -A %s --outfile=%s --calc="(A==0)*0 + (A>0)*255"' % (tmp2_fname, tmp_alpha_name)
                 print cmd
                 os.system(cmd)
                 # make the 4-band render and DEFLATE it
@@ -113,20 +113,20 @@ class S1L1Tools:
                     render_fname = "/".join(fname.split("/")[:-1]) + "/" + fname.split("/")[-1][:-7] + ".tif"
                     print "RENDER FILE NAME: %s" % render_fname
                 cmd = 'gdal_merge.py -separate -n 0 -a_nodata 0 -o %s %s %s %s %s -co PHOTOMETRIC=RGB -co COMPRESS=DEFLATE' % (
-                render_fname, tmp2_fname, tmp2_fname, tmp2_fname, tmpAlpha_fname)
+                render_fname, tmp2_fname, tmp2_fname, tmp2_fname, tmp_alpha_name)
                 print cmd
                 os.system(cmd)
                 # comment this clean-up for debugging:
                 os.remove(tmp1_fname)
                 os.remove(tmp2_fname)
-                os.remove(tmpAlpha_fname)
+                os.remove(tmp_alpha_name)
                 os.remove(fname)
                 aux_xmls = glob.glob(os.path.join(output_directory, "*.aux.xml"))
                 print os.path.join(output_directory, "*.aux.xml")
                 for xml in aux_xmls:
                     print xml
                     os.remove(xml)
-                del dataset
+                del ds
             except Exception as e:
                 print type(e)
 
@@ -319,20 +319,20 @@ class S1L1Tools:
             for child in noiseVectorList:
                 for param in child:
                     if param.tag == 'pixel':
-                        currentPixels = str(param.text).split()
+                        current_pixels = str(param.text).split()
                     if param.tag == parameter:
-                        currentValues = str(param.text).split()
+                        current_values = str(param.text).split()
 
                 i = 0
-                currentRow = np.empty([1, cols])
-                currentRow[:] = np.nan
-                while i < len(currentPixels):
-                    currentRow[0, int(currentPixels[i])] = float(currentValues[i])
+                current_row = np.empty([1, cols])
+                current_row[:] = np.nan
+                while i < len(current_pixels):
+                    current_row[0, int(current_pixels[i])] = float(current_values[i])
                     i += 1
 
-                currentRow = self.__fill_nan(currentRow)
+                current_row = self.__fill_nan(current_row)
 
-                coefficients_rows.append(currentRow[0])
+                coefficients_rows.append(current_row[0])
 
         zoom_x = float(cols) / len(coefficients_rows[0])
         zoom_y = float(rows) / len(coefficients_rows)
@@ -379,6 +379,3 @@ class S1L1Tools:
             result = False
         finally:
             return result
-
-# tools = S1L1Tools('/home/silent/Data/sakhalin/S1A_IW_GRDH_1SSV_20150430T203758_20150430T203826_005718_007570_463D.SAFE.zip')
-# tools = S1L1Tools('/home/silent/Testing/datasets/S1A_EW_GRDM_1SDH_20141101T022433_20141101T022533_003082_00387B_077E.SAFE.zip')
