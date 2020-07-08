@@ -3,6 +3,7 @@
 Created on Thu Aug 17 13:15:03 2017
 
 @author: silent
+@author: antonv
 """
 import gdal
 import zipfile
@@ -10,20 +11,14 @@ import os
 import json
 import xml.etree.ElementTree as etree
 from datetime import datetime
-from scipy import interpolate, ndimage
+# from scipy import interpolate, ndimage
 import numpy as np
 import shapely.wkt
 import geojson
 
-class S1L1Tools():
-    
-    # metadata = {}
-    # measurements = []
-    # radiometric_correction_LUT = []
-    # noise_correction_LUT = []
-        
-    
-    def __init__(self,datasource_path):
+
+class S1L1Tools:
+    def __init__(self, datasource_path):
         self.datasource_path = datasource_path
         self.datasource_body = os.path.basename(datasource_path).split('.')[0]
         self.measurements = []
@@ -46,31 +41,35 @@ class S1L1Tools():
                 if (archived_file.filename.lower().find(polarisation.lower()) !=-1) and (archived_file.filename.find('noise') !=-1) and (archived_file.filename.find('.xml') !=-1):
                     self.noise_correction_LUT.append({'polarisation':polarisation,'LUT': self.archive.read(archived_file)})
                     
-    def export_to_l2(self,output_directory,polarisations=None,projection='+proj=longlat +datum=WGS84 +no_defs', preview_mode=False, x_scale=5, y_scale=5):        
+    def export_to_l2(self, output_directory, polarisations=None, projection='+proj=longlat +datum=WGS84 +no_defs', preview_mode=False, x_scale=5, y_scale=5):
+        created_files = []
         if not polarisations:
-            polarisations=[]
+            polarisations = []
             for measurement in self.measurements:
                 polarisations.append(measurement['polarisation'])
         
         for measurement in self.measurements:
             if measurement['polarisation'] in polarisations:
                 if preview_mode:
-                    current_name = os.path.join(output_directory,self.datasource_body+'_'+measurement['polarisation']+'.jpeg')
+                    current_name = os.path.join(output_directory, self.datasource_body + '_' + measurement['polarisation'] + '.jpeg')
                 else:
-                    current_name = os.path.join(output_directory,self.datasource_body+'_'+measurement['polarisation']+'.tif')
+                    current_name = os.path.join(output_directory, self.datasource_body + '_' + measurement['polarisation'] + '.tif')
                     
                 current_measurement = self.__gcp_raster_to_projected(measurement['measurement'])
-                current_measurement = self.__reproject_raster_to_projection(current_measurement,projection)
+                current_measurement = self.__reproject_raster_to_projection(current_measurement, projection)
                 
                 if preview_mode:
                     pixelSize = self.__get_raster_pixel_size(current_measurement)
-                    current_measurement = self.__set_raster_resolution(current_measurement,pixelSize['xSize']*x_scale,pixelSize['ySize']*y_scale)
-                    self.__save_raster_to_jpeg(current_measurement,current_name)
+                    current_measurement = self.__set_raster_resolution(current_measurement, pixelSize['xSize']*x_scale, pixelSize['ySize']*y_scale)
+                    self.__save_raster_to_jpeg(current_measurement, current_name)
                 else:
-                    self.__save_raster_to_gtiff(current_measurement,current_name)
+                    self.__save_raster_to_gtiff(current_measurement, current_name)
+                created_files.append(current_name)
+
+        return created_files
             
     def perform_radiometric_calibration(self, parameter='sigma', polarisations=None):
-        if not parameter in ['sigma','beta','gamma']:
+        if parameter not in ['sigma', 'beta', 'gamma']:
             print ('Invalid parameter')
             return 0
         else:
@@ -85,7 +84,7 @@ class S1L1Tools():
             cols = measurement['measurement'].RasterXSize
             rows = measurement['measurement'].RasterYSize            
             if measurement['polarisation'] in polarisations:
-                #print measurement['polarisation']
+                # print measurement['polarisation']
                 lut_xml = self.__dict_search(self.radiometric_correction_LUT,'polarisation',measurement['polarisation'])[0]['LUT']
                 #print lut_xml                
                 full_lut = self.__get_full_coefficients_array(lut_xml,'radiometric',parameter,cols,rows)
