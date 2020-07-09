@@ -28,7 +28,7 @@ def merge_radarsat(input_file_list, out_dir):
     if len(input_file_list) > 0:
         input_file_list.sort(key=lambda x: os.path.basename(x).split("_")[3].split("T")[0])  # sorts products by their date from oldest to newest
         newest_date = os.path.basename(input_file_list[-1]).split("_")[3].split("T")[0]  # returns YYmmdd of the newest product
-        out_path = os.path.join(out_dir, "niersc_ice_class_rs_%s.tif" % newest_date)
+        out_path = os.path.join(out_dir, "niersc_ice_class_rs_%s_temp.tif" % newest_date)
         cmd = "gdal_merge.py -n 0 -a_nodata 0 -o %s" % out_path
         for input_file in input_file_list:
             cmd += " %s" % input_file
@@ -72,7 +72,7 @@ def prepare_radarsat_aggregation(input_file, out_dir):
     print cmd
     os.system(cmd)
 
-    print 'Adding DATE_TIME attribute'
+    print "Adding DATE_TIME attribute into ice edge..."
     ice_edge_dbf_name = os.path.join(out_dir, ice_edge_shp_name.split('.')[0] + '.dbf')
     ice_edge_db = dbf.Table(ice_edge_dbf_name)
     with ice_edge_db:
@@ -84,7 +84,43 @@ def prepare_radarsat_aggregation(input_file, out_dir):
             # print type(classification_date)
             class_date = datetime.strptime(classification_date, "%Y%m%d")
             dbf.write(record, date_time=class_date)
-    
+
+    ##########################################
+    # Emulating pseudo ice classification tif:
+    input_file = os.path.join(out_dir, ice_edge_wgs84_tif_name)
+    ice_class_tif_name = 'niersc_ice_class_rs_%s.tif' % classification_date
+    output_file = os.path.join(out_dir, ice_class_tif_name)
+    cmd = 'gdal_calc.py -A %s --outfile=%s --NoDataValue=255 --calc="(A==0)*3 + (A==1)*10"' % (input_file, output_file)
+    print cmd
+    os.system(cmd)
+
+    # ice class WGS84tif to coloured render
+    input_file = os.path.join(out_dir, ice_class_tif_name)
+    cmd = 'gdaldem color-relief -alpha %s %s %s' % (input_file, 'ice_class_summer_render.txt', "%s_render_tmp.tif" % input_file[:-4])
+    print cmd
+    os.system(cmd)
+    cmd = 'gdal_translate -co "COMPRESS=DEFLATE" %s %s' % ("%s_render_tmp.tif" % input_file[:-4], "%s_render.tif" % input_file[:-4])
+    os.system(cmd)
+    os.remove("%s_render_tmp.tif" % input_file[:-4])
+
+    # converting emulated ice class raster into vector
+    input_file = os.path.join(out_dir, ice_class_tif_name)
+    ice_class_shp_name = 'niersc_ice_class_rs_' + classification_date + '.shp'
+    output_file = os.path.join(out_dir, ice_class_shp_name)
+    cmd = 'gdal_polygonize.py %s -f "ESRI Shapefile" %s CLASS' % (input_file, output_file)
+    print cmd
+    os.system(cmd)
+
+    print "Adding DATE_TIME attribute into ice class..."
+    ice_class_dbf_name = os.path.join(out_dir, ice_class_shp_name.split('.')[0] + '.dbf')
+    ice_class_db = dbf.Table(ice_class_dbf_name)
+    with ice_class_db:
+        ice_class_db.add_fields('DATE_TIME D')
+        for record in ice_class_db:
+            class_date = datetime.strptime(classification_date, "%Y%m%d")
+            dbf.write(record, date_time=class_date)
+
+    # clean-up:
     print 'deleting temp'
     temp_files = glob.glob(os.path.join(out_dir, '*temp*'))
     for temp_file in temp_files:
