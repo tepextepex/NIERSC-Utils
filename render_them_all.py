@@ -6,6 +6,12 @@ import glob  # TODO: really, you are able to find all the *.xmls without glob!
 
 
 def render_directory(source_dir, out_dir=None):
+    """
+    Operates non-recursively
+    @param source_dir: directory containing Sentinel-1 zip-archives
+    @param out_dir: directory where to place renders, will be created inside source_dir if None
+    @return: None
+    """
     if out_dir is None:
         out_dir = os.path.join(source_dir, "renders")  # if doesn't exist, will be created automatically
     source_dir = os.path.join(source_dir, "")  # adds a trailing "/", if omitted
