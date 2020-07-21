@@ -11,11 +11,12 @@ import os
 import json
 import xml.etree.ElementTree as etree
 from datetime import datetime
-# from scipy import interpolate, ndimage
+from scipy import interpolate, ndimage
 import numpy as np
 import shapely.wkt
 import geojson
 import glob
+import matplotlib.pyplot as plt
 
 
 class S1L1Tools:
@@ -89,7 +90,7 @@ class S1L1Tools:
                 band = ds.GetRasterBand(1)
                 (band_min, band_max, mean, stddev) = band.GetStatistics(0, 1)
                 # compute Mean+-2StdDev
-                min2sigma = mean - 2 * stddev
+                # min2sigma = mean - 2 * stddev  # will be negative, don't use it
                 max2sigma = mean + 2 * stddev
                 # scale values to 8-bit range and set NoDataValue to 0:
                 tmp1_fname = fname[:-4] + '_tmp1.tif'
@@ -162,16 +163,13 @@ class S1L1Tools:
                                           'measurement': self.__create_mem_raster_based_on_existing(
                                               measurement['measurement'], [calibrated_array], gdal.GDT_Float32)})
 
-    def perform_noise_correction_ESA(self):
-        pass
-
     def __get_metadata(self):
         namespaces = {'safe': '{http://www.esa.int/safe/sentinel-1.0}'}
         self.metadata_raw = ''
         self.archive = zipfile.ZipFile(self.datasource_path)
         self.file_list = self.archive.filelist
         for archived_file in self.file_list:
-            if (archived_file.filename.find('manifest.safe') != -1):
+            if archived_file.filename.find('manifest.safe') != -1:
                 self.metadata_raw = self.archive.read(archived_file)
 
         if not self.metadata_raw:
@@ -256,11 +254,11 @@ class S1L1Tools:
     def __create_mem_raster_based_on_existing(self, raster, new_arrays, new_type=None):
         driver = gdal.GetDriverByName("MEM")
         if not new_type:
-            dataType = raster.GetRasterBand(1).DataType
+            data_type = raster.GetRasterBand(1).DataType
         else:
-            dataType = new_type
+            data_type = new_type
 
-        dataset = driver.Create('', raster.RasterXSize, raster.RasterYSize, raster.RasterCount, dataType)
+        dataset = driver.Create('', raster.RasterXSize, raster.RasterYSize, raster.RasterCount, data_type)
         # print ('===')
         # print (raster.GetGCPs())
         # print (raster.GetGCPProjection())
@@ -341,7 +339,8 @@ class S1L1Tools:
     def __dict_search(self, dictionary_list, key, value):
         return [element for element in dictionary_list if element[key] == value]
 
-    def __fill_nan(self, A):
+    @staticmethod
+    def __fill_nan(A):
         B = A
         ok = ~np.isnan(B)
         xp = ok.ravel().nonzero()[0]
@@ -379,3 +378,40 @@ class S1L1Tools:
             result = False
         finally:
             return result
+
+    def perform_noise_correction_ESA(self):
+        """
+        Thermal noise removal based on LUTs from metadata
+        [UNDER CONSTRUCTION]
+        @return: None
+        """
+        for measurement in self.measurements:
+            cols = measurement['measurement'].RasterXSize
+            rows = measurement['measurement'].RasterYSize
+            print "%sx%s" % (cols, rows)
+
+            noise = self.__get_full_coefficients_array(self.noise_correction_LUT[0]["LUT"], "noise", "noiseRangeLut", cols, rows)
+            self.__imsave(noise, title="range_noise_%s" % measurement['polarisation'], show=False)
+
+            orig_intensity = measurement['measurement'].GetRasterBand(1).ReadAsArray() ** 2
+            denoised_intensity = orig_intensity - noise
+            denoised_intensity[denoised_intensity < 0] = 0
+            denoised_dn = np.sqrt(denoised_intensity)
+            self.__imsave(denoised_dn, title="denoised_%s" % measurement['polarisation'], show=False)
+            # TODO: overwrite existing image or append new measurement?
+
+    def __imsave(self, array, out_dir=None, title=None, show=False):
+        if out_dir is None:
+            out_dir = os.path.dirname(self.datasource_path)
+        plt.imsave(os.path.join(out_dir, "%s.png" % title), array)
+        if show:
+            plt.imshow(array)
+            plt.title(title)
+            plt.colorbar()
+            plt.show()
+            plt.clf()
+
+
+if __name__ == "__main__":
+    s = S1L1Tools("/home/tepex/data/s1/202007/S1B_EW_GRDM_1SDH_20200715T030607_20200715T030626_022476_02AA87_BFE2.zip")
+    s.perform_noise_correction_ESA()
