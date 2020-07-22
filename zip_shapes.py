@@ -12,7 +12,8 @@ def zip_shape(shp_path):
 	"""
 	if os.path.isfile(shp_path):
 		source_dir = os.path.dirname(shp_path)
-		base = os.path.basename(shp_path).split(".")[0]  # without extension
+		# base = os.path.basename(shp_path).split(".")[0]  # removes extension. Not safe if a file name contains dots
+		base = ".".join(os.path.basename(shp_path).split(".")[:-1])  # removes extension safely
 		shx_path = os.path.join(source_dir, "%s.shx" % base)
 		dbf_path = os.path.join(source_dir, "%s.dbf" % base)
 		prj_path = os.path.join(source_dir, "%s.prj" % base)
