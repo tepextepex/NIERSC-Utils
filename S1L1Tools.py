@@ -241,8 +241,8 @@ class S1L1Tools:
 
     def __save_raster_to_gtiff(self, raster, gtiff_path):
         driver = gdal.GetDriverByName("GTiff")
-        dataType = raster.GetRasterBand(1).DataType
-        dataset = driver.Create(gtiff_path, raster.RasterXSize, raster.RasterYSize, raster.RasterCount, dataType)
+        data_type = raster.GetRasterBand(1).DataType
+        dataset = driver.Create(gtiff_path, raster.RasterXSize, raster.RasterYSize, raster.RasterCount, data_type)
         dataset.SetProjection(raster.GetProjection())
         dataset.SetGeoTransform(raster.GetGeoTransform())
         i = 1
@@ -398,7 +398,10 @@ class S1L1Tools:
             denoised_intensity[denoised_intensity < 0] = 0
             denoised_dn = np.sqrt(denoised_intensity)
             self.__imsave(denoised_dn, title="denoised_%s" % measurement['polarisation'], show=False)
-            # TODO: overwrite existing image or append new measurement?
+
+            self.measurements.append({'polarisation': "%s_denoised" % measurement['polarisation'],
+                                      'measurement': self.__create_mem_raster_based_on_existing(
+                                          measurement['measurement'], [denoised_dn], gdal.GDT_Float32)})
 
     def __imsave(self, array, out_dir=None, title=None, show=False):
         if out_dir is None:
@@ -415,3 +418,5 @@ class S1L1Tools:
 if __name__ == "__main__":
     s = S1L1Tools("/home/tepex/data/s1/202007/S1B_EW_GRDM_1SDH_20200715T030607_20200715T030626_022476_02AA87_BFE2.zip")
     s.perform_noise_correction_ESA()
+    s.render("/home/tepex/data/s1/202007/", polarisations=["HH", "HV"])
+    s.render("/home/tepex/data/s1/202007/", polarisations=["HH_denoised", "HV_denoised"])
