@@ -9,7 +9,7 @@ from zip_shapes import zip_shape
 
 class AMSR2Downloader:
 
-    # base_url = "https://seaice.uni-bremen.de/data/amsr2/bootstrap_daygrid"
+    # base_url = "https://seaice.uni-bremen.de/data/amsr2/bootstrap_daygrid"  # old one
     base_url = "https://seaice.uni-bremen.de/data/amsr2/asi_daygrid_swath"  # without trailing slash
 
     def __init__(self):
@@ -89,22 +89,30 @@ class AMSR2Downloader:
             self.extract_vector_edge(asi_path)
         self.downloaded = []
 
-    def extract_vector_edge(self, asi_full_path, ice_conc_threshold=15):
+    def extract_vector_edge(self, asi_full_path, ice_conc_threshold=15, smooth=True):
+        # TODO: handle raster files in memory
         threshold = self.__validate_threshold(ice_conc_threshold)
+        # crop the image first (to prevent the resulting vector from crossing the 180-degree meridian)
         in_file = asi_full_path
-        out_file = "%s_recalc.tif" % asi_full_path[:-4]
-        cmd = 'gdal_calc.py -A %s --outfile=%s --NoDataValue=0 --calc="0+logical_and(A>=%s,A<=100)*1"' % (in_file, out_file, threshold)
-        os.system(cmd)
-
-        in_file = out_file
         out_file = "%s_crop.tif" % asi_full_path[:-4]
         cmd = 'gdalwarp -te 0 -610000 3750000 1330000 -tr 3125 3125 -r near -dstalpha %s %s' % (in_file, out_file)
         os.system(cmd)
 
-        in_file = out_file
-        out_file = "%s-edge15.shp" % asi_full_path[:-4]
-        cmd = 'gdal_polygonize.py %s -f "ESRI Shapefile" %s ICE' % (in_file, out_file)
-        os.system(cmd)
+        if smooth:
+            in_file = out_file
+            out_file = "%s-edge15.shp" % asi_full_path[:-4]
+            cmd = 'gdal_contour -a ICE %s %s -fl %s' % (in_file, out_file, threshold)
+            os.system(cmd)
+        else:
+            in_file = out_file
+            out_file = "%s_recalc.tif" % asi_full_path[:-4]
+            cmd = 'gdal_calc.py -A %s --outfile=%s --NoDataValue=0 --calc="0+logical_and(A>=%s,A<=100)*1"' % (in_file, out_file, threshold)
+            os.system(cmd)
+
+            in_file = out_file
+            out_file = "%s-edge15.shp" % asi_full_path[:-4]
+            cmd = 'gdal_polygonize.py %s -f "ESRI Shapefile" %s ICE' % (in_file, out_file)
+            os.system(cmd)
 
         zip_shape(out_file)
 
@@ -130,4 +138,4 @@ if __name__ == "__main__":
     # a.download()
     # a.post_process()
     # or if you already have the needed raster file:
-    a.extract_vector_edge("/home/tepex/NIERSC/IEPI/AMSR/asi-AMSR2-n6250-20200721-v5.4.tif")
+    a.extract_vector_edge("/home/tepex/NIERSC/IEPI/AMSR/asi-AMSR2-n6250-20200722-v5.4.tif")
