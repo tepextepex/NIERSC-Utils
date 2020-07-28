@@ -82,7 +82,7 @@ class S1L1Tools:
 
         return created_files
 
-    def render(self, output_directory, polarisations=None, projection='EPSG:3857', preserve_source_file_name=False):
+    def render(self, output_directory, polarisations=None, projection='EPSG:3857', preserve_source_file_name=False, max_size=10):
         input_fnames = self.export_to_l2(output_directory, polarisations, projection)
         for fname in input_fnames:
             try:
@@ -113,10 +113,11 @@ class S1L1Tools:
                 if preserve_source_file_name:
                     render_fname = "/".join(fname.split("/")[:-1]) + "/" + fname.split("/")[-1][:-7] + ".tif"
                     print "RENDER FILE NAME: %s" % render_fname
-                cmd = 'gdal_merge.py -separate -n 0 -a_nodata 0 -o %s %s %s %s %s -co PHOTOMETRIC=RGB -co COMPRESS=DEFLATE' % (
-                render_fname, tmp2_fname, tmp2_fname, tmp2_fname, tmp_alpha_name)
+                cmd = 'gdal_merge.py -separate -n 0 -a_nodata 0 -o %(out)s %(in)s %(in)s %(in)s %(alpha)s -co PHOTOMETRIC=RGB -co COMPRESS=DEFLATE' % {"out": render_fname, "in": tmp2_fname, "alpha": tmp_alpha_name}
                 print cmd
                 os.system(cmd)
+                del ds
+                self.optimize_size(render_fname, max_size=max_size)
                 # comment this clean-up for debugging:
                 os.remove(tmp1_fname)
                 os.remove(tmp2_fname)
@@ -127,9 +128,35 @@ class S1L1Tools:
                 for xml in aux_xmls:
                     print xml
                     os.remove(xml)
-                del ds
             except Exception as e:
                 print type(e)
+
+    def optimize_size(self, raster_file, max_size=10, max_iter=5):
+        iter_count = 0
+        while os.path.getsize(raster_file) > max_size * 1024 * 1024 and iter_count < max_iter:
+            x_res, y_res = self.__get_pixel_size(raster_file)
+            x_res = 1.4 * x_res
+            y_res = 1.4 * y_res
+            in_file = "%s_old.tif" % raster_file[:-4]
+            os.rename(raster_file, in_file)
+            out_file = raster_file
+            cmd = 'gdalwarp -co COMPRESS=DEFLATE -tr %(x_res)s %(y_res)s %(in)s %(out)s' % {"in": in_file,
+                                                                                            "out": out_file,
+                                                                                            "x_res": x_res,
+                                                                                            "y_res": y_res}
+            os.system(cmd)
+            os.remove(in_file)
+            raster_file = out_file
+            iter_count += 1
+        else:
+            x_res, y_res = self.__get_pixel_size(raster_file)
+            print "After %d iterations raster resolution is %.0fx%.0f (m per pix)" % (iter_count, x_res, y_res)
+
+    @staticmethod
+    def __get_pixel_size(raster_file):
+        ds = gdal.Open(raster_file)
+        gt = ds.GetGeoTransform()
+        return gt[1], -gt[5]
 
     def perform_radiometric_calibration(self, parameter='sigma', polarisations=None):
         if parameter not in ['sigma', 'beta', 'gamma']:
