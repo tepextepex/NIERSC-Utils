@@ -13,7 +13,7 @@ import xml.etree.ElementTree as etree
 from datetime import datetime
 from scipy import interpolate, ndimage
 import numpy as np
-import shapely.wkt
+# import shapely.wkt
 import geojson
 import glob
 import matplotlib.pyplot as plt
@@ -98,8 +98,8 @@ class S1L1Tools:
                 self.__scale_values_to_byte(ds, 0, max2sigma, tmp1_fname)
                 # coarse the resolution:
                 tmp2_fname = fname[:-4] + '_tmp2.tif'
-                cmd = 'gdalwarp -tr 600 1200 -srcnodata 0 -dstnodata none %s %s' % (
-                tmp1_fname, tmp2_fname)  # -dstnodata none instead of 0 is for calculating alpha band
+                # we make -dstnodata none instead of 0 to compute the alpha band:
+                cmd = 'gdalwarp -tr 600 1200 -srcnodata 0 -dstnodata none %s %s' % (tmp1_fname, tmp2_fname)
                 print cmd
                 os.system(cmd)
                 # calc alpha band from nodata
@@ -308,7 +308,7 @@ class S1L1Tools:
         if mode == 'radiometric':
             xml_element_name = 'calibrationVectorList'
         elif mode == 'noise':
-            xml_element_name = 'noiseVectorList'
+            xml_element_name = 'noiseRangeVectorList'
 
         coefficients_rows = []
 
@@ -385,19 +385,20 @@ class S1L1Tools:
         [UNDER CONSTRUCTION]
         @return: None
         """
-        for measurement in self.measurements:
+        measurements = self.measurements[:]  # self.measurements will be modified, so don't iterate over it
+        for measurement in measurements:
             cols = measurement['measurement'].RasterXSize
             rows = measurement['measurement'].RasterYSize
             print "%sx%s" % (cols, rows)
 
             noise = self.__get_full_coefficients_array(self.noise_correction_LUT[0]["LUT"], "noise", "noiseRangeLut", cols, rows)
-            self.__imsave(noise, title="range_noise_%s" % measurement['polarisation'], show=False)
+            # self.__imsave(noise, title="range_noise_%s" % measurement['polarisation'], show=False)
 
             orig_intensity = measurement['measurement'].GetRasterBand(1).ReadAsArray() ** 2
             denoised_intensity = orig_intensity - noise
             denoised_intensity[denoised_intensity < 0] = 0
             denoised_dn = np.sqrt(denoised_intensity)
-            self.__imsave(denoised_dn, title="denoised_%s" % measurement['polarisation'], show=False)
+            # self.__imsave(denoised_dn, title="denoised_%s" % measurement['polarisation'], show=False)
 
             self.measurements.append({'polarisation': "%s_denoised" % measurement['polarisation'],
                                       'measurement': self.__create_mem_raster_based_on_existing(
@@ -418,5 +419,5 @@ class S1L1Tools:
 if __name__ == "__main__":
     s = S1L1Tools("/home/tepex/data/s1/202007/S1B_EW_GRDM_1SDH_20200715T030607_20200715T030626_022476_02AA87_BFE2.zip")
     s.perform_noise_correction_ESA()
-    s.render("/home/tepex/data/s1/202007/", polarisations=["HH", "HV"])
-    s.render("/home/tepex/data/s1/202007/", polarisations=["HH_denoised", "HV_denoised"])
+    s.render("/home/tepex/data/s1/202007/", polarisations=["HH", "HV"], preserve_source_file_name=True)
+    s.render("/home/tepex/data/s1/202007/", polarisations=["HH_denoised", "HV_denoised"], preserve_source_file_name=True)
