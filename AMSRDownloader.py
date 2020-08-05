@@ -86,7 +86,7 @@ class AMSR2Downloader:
 
     def post_process(self):
         for asi_path in self.downloaded:
-            self.extract_vector_edge(asi_path)
+            self.extract_vector_edge(asi_path, smooth=False)
         self.downloaded = []
 
     def extract_vector_edge(self, asi_full_path, ice_conc_threshold=15, smooth=True):
@@ -95,7 +95,8 @@ class AMSR2Downloader:
         # crop the image first (to prevent the resulting vector from crossing the 180-degree meridian)
         in_file = asi_full_path
         out_file = "%s_crop.tif" % asi_full_path[:-4]
-        cmd = 'gdalwarp -te 0 -610000 3750000 1330000 -tr 3125 3125 -r near -dstalpha %s %s' % (in_file, out_file)
+        # cmd = 'gdalwarp -te 0 -610000 3750000 1330000 -tr 3125 3125 -r near -dstalpha %s %s' % (in_file, out_file)
+        cmd = 'gdalwarp -t_srs EPSG:4326 -te -179 63 179 85 -r near -dstalpha %s %s' % (in_file, out_file)
         os.system(cmd)
 
         if smooth:
@@ -138,4 +139,4 @@ if __name__ == "__main__":
     # a.download()
     # a.post_process()
     # or if you already have the needed raster file:
-    a.extract_vector_edge("/home/tepex/NIERSC/IEPI/AMSR/asi-AMSR2-n6250-20200722-v5.4.tif")
+    a.extract_vector_edge("/home/tepex/NIERSC/IEPI/AMSR/asi-AMSR2-n6250-20200804-v5.4.tif", smooth=False)
